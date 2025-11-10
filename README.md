@@ -19,42 +19,34 @@ A Supabase Edge Function implementation of the [x402 payment protocol](https://x
 - A wallet address to receive payments
 - Supabase CLI installed (`npm install -g supabase`)
 
-## Why base64url Polyfill?
+## base64url Support
 
-This project includes a custom `base64url` polyfill (`base64url/buffer-polyfill.ts`) that extends Node.js's `Buffer` class to support base64url encoding. Here's why it's necessary:
+This project uses Deno's native `base64url` encoding from the standard library, combined with a minimal Buffer polyfill. The x402 protocol requires base64url encoding (not standard base64) for encoding payment response headers.
 
-### The Problem
+### Why a Polyfill is Needed
 
-1. **Supabase Edge Functions Runtime Limitation**: Supabase Edge Functions run on Deno, which provides Node.js compatibility via `node:buffer`. However, Deno's `node:buffer` implementation doesn't support the `base64url` encoding format that's part of the x402 protocol specification.
-
-2. **Coinbase SDK Requirement**: The Coinbase x402 SDK requires base64url encoding for creating JWT authentication headers when communicating with the Coinbase facilitator API. Without base64url support, the SDK cannot generate the necessary authentication headers.
-
-3. **x402 Protocol Standard**: The x402 protocol uses base64url encoding (not standard base64) for encoding payment response headers. Base64url is URL-safe and doesn't require padding, making it ideal for HTTP headers.
+While Deno has native base64url support via `deno.land/std/encoding/base64url.ts`, the Coinbase x402 SDK uses `Buffer.toString('base64url')` internally for creating JWT authentication headers. Deno's `Buffer` from `node:buffer` doesn't support the `'base64url'` encoding format natively.
 
 ### The Solution
 
-The polyfill:
-- Extends `Buffer.from()` to accept `"base64url"` as an encoding parameter
-- Extends `Buffer.prototype.toString()` to output base64url encoding
-- Uses Deno's native base64url encode/decode functions under the hood
-- Must be imported **before** the `@coinbase/x402` package to ensure Buffer is properly extended
+The code includes a minimal polyfill that:
+- Imports `Buffer` from `node:buffer`
+- Uses Deno's native base64url encoding (`deno.land/std/encoding/base64url.ts`)
+- Extends `Buffer.prototype.toString()` to support `'base64url'` encoding
+- Makes Buffer available globally for the Coinbase SDK
 
-### Import Order Matters
+This approach:
+- ✅ Uses Deno's native base64url functions (not a custom implementation)
+- ✅ Minimal polyfill (only extends `toString()` method)
+- ✅ Works with Coinbase SDK's internal JWT creation
+- ✅ Uses `esm.sh` with `target=denonext` for optimal Deno compatibility
 
-```typescript
-// ✅ Correct: Import polyfill FIRST
-import "buffer-polyfill"
-import * as x402 from "@coinbase/x402"
+### Important Notes
 
-// ❌ Wrong: SDK imported before polyfill
-import * as x402 from "@coinbase/x402"
-import "buffer-polyfill"  // Too late!
-```
-
-Without this polyfill, you would encounter errors like:
-- `TypeError: Unknown encoding: base64url`
-- `AUTH_HEADER_CREATION_FAILED`
-- Payment verification failures
+- **Native Encoding**: Uses `deno.land/std/encoding/base64url.ts` for actual encoding/decoding
+- **Buffer Polyfill**: Extends Buffer to support `toString('base64url')` required by Coinbase SDK
+- **x402 Protocol Requirement**: The x402 protocol uses base64url encoding because it's URL-safe and doesn't require padding, making it ideal for HTTP headers
+- **Import Method**: Using `esm.sh/@coinbase/x402@latest?target=denonext` ensures optimal Deno compatibility
 
 ## Setup
 
@@ -315,10 +307,7 @@ supabase functions serve x402-payment
 ```
 supabase/functions/x402-payment/
 ├── index.ts                 # Main Edge Function
-├── deno.json               # Deno configuration
-└── base64url/              # Buffer polyfill for base64url support
-    ├── buffer-polyfill.ts
-    └── mod.ts
+└── deno.json               # Deno configuration
 ```
 
 ## License

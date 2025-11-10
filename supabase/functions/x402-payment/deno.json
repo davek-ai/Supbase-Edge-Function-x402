@@ -4,8 +4,7 @@
     "strict": true
   },
   "imports": {
-    "supabase": "https://esm.sh/@supabase/supabase-js@2",
-    "@coinbase/x402": "https://esm.sh/@coinbase/x402@latest",
-    "buffer-polyfill": "./base64url/buffer-polyfill.ts"
+    "supabase": "npm:@supabase/supabase-js@2",
+    "@coinbase/x402": "https://esm.sh/@coinbase/x402@latest?target=denonext"
   }
 }
