@@ -1,71 +1,105 @@
-# x402 Payment Edge Function for Supabase
+# Supabase x402 Payment Edge Function
 
-A Supabase Edge Function implementation of the [x402 payment protocol](https://x402.org/) using Coinbase's x402 SDK. This function enables paywalled content access by requiring USDC payments on Base network before serving protected resources (like PDFs).
+A production-ready Supabase Edge Function implementation of the [x402 payment protocol](https://x402.org/) that enables paywalled content access using USDC payments on the Base network.
 
-## Features
+## High-Level Overview
 
-- ✅ x402-compliant payment verification and settlement
-- ✅ Support for Base mainnet and Base Sepolia testnet
-- ✅ USDC payment processing via Coinbase facilitator
-- ✅ Protected resource delivery (PDFs from Supabase Storage)
-- ✅ Signed URL generation for secure file access
-- ✅ Comprehensive error handling and logging
-- ✅ CORS support for web applications
+### What is x402?
 
-## Prerequisites
+x402 is an HTTP status code extension that enables paywalled content on the web. When a client requests a protected resource, the server responds with `402 Payment Required` and includes payment requirements in the response. The client then submits a payment authorization, and the server verifies and settles the payment before serving the resource.
 
-- A Supabase project
-- A Coinbase Developer Platform (CDP) API key
-- A wallet address to receive payments
-- Supabase CLI installed (`npm install -g supabase`)
+### Architecture
 
-## base64url Support
+This implementation consists of two main components:
 
-This project uses Deno's native `base64url` encoding from the standard library, combined with a minimal Buffer polyfill. The x402 protocol requires base64url encoding (not standard base64) for encoding payment response headers.
+1. **Supabase Edge Function** (`supabase/functions/x402-payment/`)
+   - Implements the x402 payment protocol server-side
+   - Verifies and settles USDC payments via Coinbase facilitator
+   - Serves protected resources (PDFs) from Supabase Storage after payment verification
+   - Supports both Base mainnet and Base Sepolia testnet
 
-### Why a Polyfill is Needed
+2. **Python Client Example** (`clients/httpx/`)
+   - Demonstrates how to interact with x402-protected endpoints
+   - Automatically handles payment flow using the `x402` Python package
+   - Shows two integration approaches: simple and extensible
 
-While Deno has native base64url support via `deno.land/std/encoding/base64url.ts`, the Coinbase x402 SDK uses `Buffer.toString('base64url')` internally for creating JWT authentication headers. Deno's `Buffer` from `node:buffer` doesn't support the `'base64url'` encoding format natively.
+### How It Works
 
-### The Solution
-
-The code includes a minimal polyfill that:
-- Imports `Buffer` from `node:buffer`
-- Uses Deno's native base64url encoding (`deno.land/std/encoding/base64url.ts`)
-- Extends `Buffer.prototype.toString()` to support `'base64url'` encoding
-- Makes Buffer available globally for the Coinbase SDK
-
-This approach:
-- ✅ Uses Deno's native base64url functions (not a custom implementation)
-- ✅ Minimal polyfill (only extends `toString()` method)
-- ✅ Works with Coinbase SDK's internal JWT creation
-- ✅ Uses `esm.sh` with `target=denonext` for optimal Deno compatibility
-
-### Important Notes
-
-- **Native Encoding**: Uses `deno.land/std/encoding/base64url.ts` for actual encoding/decoding
-- **Buffer Polyfill**: Extends Buffer to support `toString('base64url')` required by Coinbase SDK
-- **x402 Protocol Requirement**: The x402 protocol uses base64url encoding because it's URL-safe and doesn't require padding, making it ideal for HTTP headers
-- **Import Method**: Using `esm.sh/@coinbase/x402@latest?target=denonext` ensures optimal Deno compatibility
-
-## Setup
-
-### 1. Clone and Install
-
-```bash
-git clone <your-repo-url>
-cd "Supabase Edge Func x402"
+```
+┌─────────┐                    ┌──────────────┐                    ┌─────────────┐
+│ Client  │                    │ Supabase     │                    │ Coinbase    │
+│         │                    │ Edge Func    │                    │ Facilitator │
+└────┬────┘                    └──────┬───────┘                    └──────┬──────┘
+     │                                 │                                  │
+     │ 1. GET /x402-payment            │                                  │
+     ├────────────────────────────────>│                                  │
+     │                                 │                                  │
+     │ 2. 402 Payment Required         │                                  │
+     │    (with payment requirements)  │                                  │
+     │<────────────────────────────────┤                                  │
+     │                                 │                                  │
+     │ 3. Create payment authorization │                                  │
+     │    (signed with wallet)         │                                  │
+     │                                 │                                  │
+     │ 4. GET /x402-payment            │                                  │
+     │    + X-Payment header           │                                  │
+     ├────────────────────────────────>│                                  │
+     │                                 │                                  │
+     │                                 │ 5. Verify payment               │
+     │                                 ├─────────────────────────────────>│
+     │                                 │                                  │
+     │                                 │ 6. Settlement result            │
+     │                                 │<─────────────────────────────────┤
+     │                                 │                                  │
+     │ 7. 200 OK + Resource           │                                  │
+     │    (PDF signed URL)            │                                  │
+     │<────────────────────────────────┤                                  │
+     │                                 │                                  │
 ```
 
-### 2. Link to Your Supabase Project
+### Key Features
+
+- ✅ **x402-compliant**: Implements the full x402 payment protocol specification
+- ✅ **USDC Payments**: Accepts USDC payments on Base mainnet and Base Sepolia testnet
+- ✅ **Coinbase Integration**: Uses Coinbase Developer Platform (CDP) facilitator API
+- ✅ **Protected Resources**: Serves PDFs from Supabase Storage after payment verification
+- ✅ **Automatic Payment Handling**: Client library handles payment flow automatically
+- ✅ **CORS Support**: Ready for web application integration
+- ✅ **Error Handling**: Comprehensive error handling and logging
+
+---
+
+## Quick Start Guide
+
+### Prerequisites
+
+- A Supabase project ([create one here](https://supabase.com))
+- A Coinbase Developer Platform API key ([get one here](https://portal.cdp.coinbase.com))
+- A wallet address to receive payments
+- Supabase CLI installed: `npm install -g supabase`
+- Python 3.8+ and `uv` package manager (for client testing)
+
+### Part 1: Deploy the Supabase Function
+
+#### Step 1: Install Supabase CLI and Login
 
 ```bash
+npm install -g supabase
+supabase login
+```
+
+#### Step 2: Link Your Project
+
+```bash
+cd "Supabase Edge Func x402"
 supabase link --project-ref your-project-ref
 ```
 
-### 3. Set Required Secrets
+You can find your project ref in your Supabase dashboard URL: `https://supabase.com/dashboard/project/YOUR_PROJECT_REF`
 
-Set the following secrets using Supabase CLI:
+#### Step 3: Set Required Secrets
+
+Set your payment destination address and Coinbase API credentials:
 
 ```bash
 # Required: Your wallet address to receive payments
@@ -80,9 +114,9 @@ supabase secrets set CDP_API_KEY_SECRET=your_api_key_secret
 supabase secrets set CDP_API_KEY=your_api_key
 ```
 
-### 4. Optional Configuration
+#### Step 4: Optional Configuration
 
-Set optional secrets to customize behavior:
+Customize storage bucket and file paths (defaults are provided):
 
 ```bash
 # Optional: Custom PDF storage bucket (default: 'pdf')
@@ -95,233 +129,170 @@ supabase secrets set PDF_FILE_NAME=path/to/your/file.pdf
 supabase secrets set RESOURCE_URL=https://your-domain.com/resource
 ```
 
-### 5. Deploy
+#### Step 5: Upload a PDF to Supabase Storage
+
+1. Go to your Supabase dashboard → Storage
+2. Create a bucket named `pdf` (or use your custom bucket name)
+3. Upload a PDF file to `files/x402.pdf` (or your custom path)
+4. Make sure the bucket is configured correctly (public or private with proper policies)
+
+#### Step 6: Deploy the Function
 
 ```bash
 supabase functions deploy x402-payment
 ```
 
-## Environment Variables
+#### Step 7: Verify Deployment
 
-### Required
+Test the function endpoint (should return 402 Payment Required):
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PAYMENT_DESTINATION_ADDRESS` | Ethereum wallet address to receive payments | `0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb` |
-| `CDP_API_KEY_ID` | Coinbase API Key ID | (from Coinbase Developer Platform) |
-| `CDP_API_KEY_SECRET` | Coinbase API Key Secret | (from Coinbase Developer Platform) |
-
-**OR** (alternative)
-
-| Variable | Description |
-|----------|-------------|
-| `CDP_API_KEY` | Single Coinbase API Key (if not using ID/Secret pair) |
-
-### Optional
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PDF_STORAGE_BUCKET` | Supabase Storage bucket name containing PDF | `pdf` |
-| `PDF_FILE_NAME` | Path to PDF file in storage bucket | `files/x402.pdf` |
-| `RESOURCE_URL` | Resource URL for payment requirements | `https://x402.org/resource` |
-
-### Automatically Available
-
-These are automatically provided by Supabase Edge Functions:
-
-- `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (for storage access)
-- `SUPABASE_ANON_KEY` - Anonymous key (fallback)
-
-## Usage
-
-### Payment Flow
-
-1. **Client requests resource** without payment header
-   ```bash
-   GET /functions/v1/x402-payment
-   ```
-   Returns: `402 Payment Required` with payment requirements
-
-2. **Client generates payment authorization** using `@coinbase/x402` SDK
-
-3. **Client requests resource** with payment header
-   ```bash
-   GET /functions/v1/x402-payment
-   Headers:
-     X-PAYMENT: <base64url-encoded-payment-authorization>
-   ```
-   Returns: `200 OK` with PDF URL (if payment verified)
-
-### Response Format
-
-**Success (200 OK):**
-```json
-{
-  "pdfUrl": "https://your-project.supabase.co/storage/v1/object/sign/pdf/files/x402.pdf?token=...",
-  "expiresIn": "1 hour",
-  "message": "PDF URL expires in 1 hour"
-}
+```bash
+curl https://YOUR_PROJECT_REF.supabase.co/functions/v1/x402-payment
 ```
 
-**Payment Required (402):**
-```json
-{
-  "x402Version": 1,
-  "error": "Payment required to access this resource",
-  "accepts": [{
-    "scheme": "exact",
-    "network": "base",
-    "maxAmountRequired": "10000",
-    "resource": "https://your-project.supabase.co/functions/v1/x402-payment",
-    "description": "Payment for resource access",
-    "mimeType": "application/json",
-    "payTo": "0xYourWalletAddress",
-    "maxTimeoutSeconds": 60,
-    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    "extra": {
-      "name": "USD Coin",
-      "version": "2"
-    }
-  }]
-}
+You should see a JSON response with payment requirements.
+
+---
+
+### Part 2: Test with the Python Client
+
+#### Step 1: Navigate to Client Directory
+
+```bash
+cd clients/httpx
 ```
+
+#### Step 2: Set Up Environment Variables
+
+Copy the example environment file and add your credentials:
+
+```bash
+cp .env-local .env
+```
+
+Edit `.env` and add your values:
+
+```env
+RESOURCE_SERVER_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/x402-payment
+ENDPOINT_PATH=/x402-payment
+PRIVATE_KEY=0xYourPrivateKeyHere
+SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**Important Notes:**
+- `PRIVATE_KEY`: Your wallet's private key (must have USDC on Base network for payments)
+- `SUPABASE_ANON_KEY`: Found in your Supabase dashboard → Settings → API
+- For testnet testing, ensure your wallet has Base Sepolia USDC
+
+#### Step 3: Install Dependencies
+
+```bash
+uv sync
+```
+
+#### Step 4: Run the Client
+
+```bash
+uv run python main.py
+```
+
+The client will:
+1. Make a request to the protected endpoint
+2. Receive a 402 Payment Required response
+3. Automatically create and sign a payment authorization
+4. Submit the payment and verify settlement
+5. Receive the protected resource (PDF signed URL)
+
+#### Step 5: Verify Payment
+
+Check the response output for:
+- Payment transaction hash
+- Resource URL (signed URL to the PDF)
+- Success status
+
+You can also verify the transaction on [BaseScan](https://basescan.org) (mainnet) or [Base Sepolia Explorer](https://sepolia.basescan.org) (testnet).
+
+---
+
+## Testing Tips
+
+### Testnet vs Mainnet
+
+The function defaults to Base mainnet. To test on Base Sepolia:
+
+1. Modify `PAYMENT_REQUIREMENTS.network` in `index.ts` to `'base-sepolia'`
+2. Redeploy: `supabase functions deploy x402-payment`
+3. Ensure your test wallet has Base Sepolia USDC
 
 ### Debug Endpoint
 
-Test PDF URL generation without payment:
+Access the debug endpoint to check storage configuration:
 
 ```bash
-GET /functions/v1/x402-payment?debug=true
+curl "https://YOUR_PROJECT_REF.supabase.co/functions/v1/x402-payment?debug=true"
 ```
 
-Returns:
-```json
-{
-  "pdfUrl": "https://...",
-  "bucket": "pdf",
-  "fileName": "files/x402.pdf",
-  "availableFiles": ["files/x402.pdf"]
-}
-```
+This returns:
+- PDF signed URL
+- Storage bucket configuration
+- Available files in the bucket
 
-## Payment Configuration
+### Common Issues
 
-### Current Settings
+**Issue: "Payment payload is empty"**
+- Ensure the client is sending the `X-Payment` header
+- Check that the client library is properly configured
 
-- **Amount**: 0.01 USDC
-- **Network**: Base (mainnet)
-- **Currency**: USDC
-- **Contract**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (Base mainnet)
+**Issue: "MISSING_API_CREDENTIALS"**
+- Verify secrets are set: `supabase secrets list`
+- Ensure CDP API keys are valid
 
-### Testnet Support
+**Issue: "Failed to create PDF URL"**
+- Verify the storage bucket exists and is accessible
+- Check the file path matches `PDF_FILE_NAME` secret
+- Ensure proper storage policies are set
 
-The function automatically detects Base Sepolia testnet and uses:
-- **Contract**: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
-- **Name**: "USDC" (vs "USD Coin" on mainnet)
+**Issue: Payment verification fails**
+- Check that your wallet has sufficient USDC balance
+- Verify network matches (mainnet vs testnet)
+- Check Coinbase facilitator API status
 
-To use testnet, ensure your payment authorization uses `network: "base-sepolia"`.
+---
 
-## Storage Setup
-
-1. **Create a storage bucket** in Supabase Dashboard:
-   - Go to Storage → Create bucket
-   - Name it `pdf` (or your custom name)
-   - Set as private (recommended) or public
-
-2. **Upload your PDF**:
-   - Upload to `files/x402.pdf` (or your custom path)
-   - Ensure the file is accessible
-
-3. **Verify access**:
-   - Use the debug endpoint: `/functions/v1/x402-payment?debug=true`
-
-## Security Notes
-
-- ✅ **No secrets in code** - All sensitive values use environment variables
-- ✅ **Signed URLs** - PDFs are served via temporary signed URLs (1 hour expiry)
-- ✅ **Payment verification** - All payments are verified via Coinbase facilitator
-- ✅ **CORS enabled** - Configured for web application access
-
-### Important Security Practices
-
-1. **Never commit secrets** - Use Supabase secrets management
-2. **Use service role key** - For storage access (automatically used)
-3. **Private buckets** - Keep storage buckets private when possible
-4. **Monitor logs** - Check Supabase Edge Function logs for suspicious activity
-
-## Response Headers
-
-- `X-PAYMENT-RESPONSE` - Base64URL-encoded settlement response (when payment succeeds)
-- `X-Payment-Status` - Payment verification status (`verified`)
-- `Access-Control-Allow-Origin` - CORS header (`*`)
-
-## Error Handling
-
-The function provides detailed error messages:
-
-- `EMPTY_PAYLOAD` - Missing X-PAYMENT header
-- `NOT_X402_PAYLOAD` - Invalid payment format
-- `MISSING_API_CREDENTIALS` - Coinbase API keys not configured
-- `AUTH_HEADER_CREATION_FAILED` - API authentication error
-- `SETTLEMENT_ERROR` - Payment settlement failed
-- `AUTHORIZATION_EXPIRED` - Payment authorization expired
-
-## Troubleshooting
-
-### "Object not found" Error
-
-- Verify bucket name matches `PDF_STORAGE_BUCKET` (default: `pdf`)
-- Verify file path matches `PDF_FILE_NAME` (default: `files/x402.pdf`)
-- Check file exists in Supabase Storage
-- Use debug endpoint to list available files
-
-### Payment Verification Fails
-
-- Ensure `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` are set correctly
-- Verify payment authorization uses correct network (`base` or `base-sepolia`)
-- Check payment amount matches (0.01 USDC = 10000 smallest units)
-- Verify `PAYMENT_DESTINATION_ADDRESS` matches authorization `to` field
-
-### Settlement Fails
-
-- Check facilitator wallet has ETH for gas fees
-- Verify authorization hasn't expired
-- Check network/RPC connectivity
-- Review Supabase Edge Function logs for detailed error messages
-
-## Development
-
-### Local Testing
-
-```bash
-# Start Supabase locally
-supabase start
-
-# Serve function locally
-supabase functions serve x402-payment
-```
-
-### Project Structure
+## Project Structure
 
 ```
-supabase/functions/x402-payment/
-├── index.ts                 # Main Edge Function
-└── deno.json               # Deno configuration
+.
+├── supabase/
+│   ├── functions/
+│   │   └── x402-payment/
+│   │       ├── index.ts          # Main Edge Function implementation
+│   │       ├── deno.json         # Deno configuration and imports
+│   │       └── README.md         # Detailed function documentation
+│   └── config.toml               # Supabase function configuration
+├── clients/
+│   └── httpx/
+│       ├── main.py               # Simple client example
+│       ├── extensible.py         # Extensible client example
+│       ├── pyproject.toml        # Python dependencies
+│       └── README.md             # Client documentation
+└── README.md                     # This file
 ```
+
+---
+
+## Additional Resources
+
+- [x402 Protocol Specification](https://x402.org/)
+- [Coinbase x402 SDK Documentation](https://github.com/coinbase/x402)
+- [Supabase Edge Functions Docs](https://supabase.com/docs/guides/functions)
+- [Base Network Documentation](https://docs.base.org/)
+
+---
+
+Created by Davek https://x.com/davek_btc/ & Human https://x.com/human058382928
 
 ## License
 
-MIT License - feel free to use and modify as needed.
-
-## Author
-
-Created by [@davek_btc](https://x.com/davek_btc/)
-
-## Resources
-
-- [x402 Protocol Specification](https://x402.org/)
-- [Coinbase x402 SDK](https://github.com/coinbase/x402)
-- [Supabase Edge Functions Docs](https://supabase.com/docs/guides/functions)
-- [Supabase Storage Docs](https://supabase.com/docs/guides/storage)
+This project is provided as-is for educational and demonstration purposes.
 

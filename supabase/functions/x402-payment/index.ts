@@ -92,7 +92,7 @@ function createPaymentResponseHeader(settlementResult: any): string {
   
   // Use base64url encoding (x402 spec uses base64url, not standard base64)
   // Using native Deno base64url encoding via Buffer polyfill
-  return Buffer.from(JSON.stringify(responseData), 'utf8').toString('base64url')
+  return Buffer.from(JSON.stringify(responseData), 'utf8').toString('base64')
 }
 
 /**
@@ -138,7 +138,26 @@ async function verifyPayment(paymentPayload: string, resourceUrl?: string): Prom
 
     let paymentData
     try {
-      paymentData = JSON.parse(trimmedPayload)
+      // X-PAYMENT header is base64-encoded JSON, decode it first
+      let decodedPayload: string
+      try {
+        // Try base64 decoding (standard base64)
+        decodedPayload = atob(trimmedPayload)
+      } catch (base64Error) {
+        // If base64 fails, try base64url decoding (URL-safe variant)
+        try {
+          const base64 = trimmedPayload.replace(/-/g, '+').replace(/_/g, '/')
+          const pad = base64.length % 4
+          const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64
+          decodedPayload = atob(paddedBase64)
+        } catch (base64urlError) {
+          console.error('Failed to decode base64/base64url payload:', base64Error, base64urlError)
+          return { isValid: false, error: { invalidReason: 'INVALID_BASE64_ENCODING' } }
+        }
+      }
+      
+      // Parse the decoded JSON
+      paymentData = JSON.parse(decodedPayload)
       
       // Validate that payload is x402-compliant (has x402Version, scheme, network, payload)
       const isX402Payload = paymentData.x402Version !== undefined && 
