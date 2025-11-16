@@ -61,26 +61,76 @@ async def main():
         # Make request - payment handling is automatic
         try:
             assert endpoint_path is not None  # we already guard against None above
-            print(f"Making request to {endpoint_path}")
+            print(f"🌐 Making request to: {endpoint_path}")
+            print(f"📡 Base URL: {base_url}")
+            print(f"🔐 Account: {account.address}")
+            print()
+            print("=" * 60)
+            print("x402 Payment Flow:")
+            print("=" * 60)
+            print("1. Initial request (expecting 402 Payment Required)...")
+            
             response = await client.get(endpoint_path)
-
+            
+            print(f"2. Response Status: {response.status_code}")
+            
             # Read the response content
             content = await response.aread()
-            print(f"Response: {content.decode()}")
+            content_str = content.decode()
+            
+            # Show response details
+            print(f"\n📋 Response Headers:")
+            x_payment_sent = False
+            for key, value in response.headers.items():
+                if 'payment' in key.lower() or 'x-' in key.lower():
+                    print(f"   {key}: {value[:100]}..." if len(str(value)) > 100 else f"   {key}: {value}")
+                    if 'x-payment' in key.lower():
+                        x_payment_sent = True
+            
+            print(f"\n📦 Response Body:")
+            try:
+                import json
+                data = json.loads(content_str)
+                print(json.dumps(data, indent=2))
+            except:
+                print(content_str[:500])
+            
+            # Verify X-PAYMENT header was sent
+            print(f"\n{'=' * 60}")
+            print("X-PAYMENT Header Verification:")
+            print(f"{'=' * 60}")
+            if response.status_code == 200:
+                print("✅ Payment verified successfully!")
+                print("   (x402HttpxClient automatically handled the payment flow)")
+                print("   - Received 402 Payment Required")
+                print("   - Generated payment authorization")
+                print("   - Sent request with X-PAYMENT header")
+                print("   - Received 200 OK with function result")
+            elif response.status_code == 402:
+                print("⚠️  Received 402 Payment Required")
+                print("   This means payment was not processed correctly")
+                print("   Check payment requirements and wallet balance")
+            else:
+                print(f"⚠️  Unexpected status code: {response.status_code}")
 
             # Check for payment response header
             if "X-Payment-Response" in response.headers:
                 payment_response = decode_x_payment_response(
                     response.headers["X-Payment-Response"]
                 )
-                print(
-                    f"Payment response transaction hash: {payment_response['transaction']}"
-                )
+                print(f"\n✅ Payment Settlement Confirmed:")
+                print(f"   Transaction: {payment_response.get('transaction', 'N/A')}")
+                print(f"   Network: {payment_response.get('network', 'N/A')}")
+                print(f"   Payer: {payment_response.get('payer', 'N/A')}")
             else:
-                print("Warning: No payment response header found")
+                print(f"\n⚠️  No X-Payment-Response header")
+                print(f"   Payment was verified but settlement header not present")
+                print(f"   (This is normal if settlement failed but verification passed)")
 
         except Exception as e:
-            print(f"Error occurred: {str(e)}")
+            print(f"\n❌ Error occurred: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

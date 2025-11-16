@@ -863,12 +863,32 @@ serve(async (req) => {
   }
 
   try {
+    // TEST MODE: Allow bypassing payment with ?test=true query parameter
+    // This is useful for development/testing with curl
+    const url = new URL(req.url)
+    const testMode = url.searchParams.get('test') === 'true' || url.searchParams.get('bypass_payment') === 'true'
+    
+    if (testMode) {
+      console.log('⚠️ TEST MODE ENABLED - Payment verification bypassed')
+      // Set up response headers for test mode
+      const responseHeaders = new Headers()
+      responseHeaders.set('Access-Control-Allow-Origin', '*')
+      responseHeaders.set('X-Payment-Status', 'bypassed-test-mode')
+      responseHeaders.set('X-Test-Mode', 'true')
+      
+      // Skip to custom function implementation
+      // The generator will insert the custom implementation code here
+      // For now, throw error if implementation not generated yet
+      // After generation, this will execute the custom function logic
+      throw new Error('Function implementation not generated. Please run: deno run --allow-read --allow-write --allow-net --allow-env scripts/generate-function.ts <function-slug>')
+    }
+    
     // Check for X-PAYMENT header (case-insensitive check)
     const paymentPayload = req.headers.get('X-PAYMENT') || req.headers.get('x-payment')
     
     // Construct full resource URL for payment requirements
     // req.url might be http:// internally, so we need to construct the proper HTTPS URL
-    const url = new URL(req.url)
+    // Note: url was already created above for test mode check
     // Use the hostname from the URL, not the host header (which might be edge-runtime)
     const hostname = url.hostname
     // Always use HTTPS for Supabase URLs
@@ -1100,82 +1120,41 @@ serve(async (req) => {
       settlementError: verificationResult.settlementResult?.errorMessage || null
     })
     
-    // Get PDF URL from Supabase storage
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY')!
-      const supabase = createClient(supabaseUrl, supabaseKey)
-      
-      // Get bucket name and file path from environment variables or use defaults
-      const pdfBucket = Deno.env.get('PDF_STORAGE_BUCKET') || 'pdf'
-      const pdfFileName = Deno.env.get('PDF_FILE_NAME') || 'files/x402.pdf'
-      
-      console.log(`Attempting to get PDF from bucket: ${pdfBucket}, file: ${pdfFileName}`)
-      
-      // First, try to list files in the bucket to help debug
-      const { data: listData, error: listError } = await supabase.storage
-        .from(pdfBucket)
-        .list()
-      
-      if (listError) {
-        console.error('Error listing files in bucket:', listError)
-        console.error('Bucket might not exist or be accessible')
-      } else {
-        console.log(`Files in bucket '${pdfBucket}':`, listData?.map(f => f.name) || [])
-      }
-      
-      // Get signed URL for the PDF file (works with both public and private buckets)
-      // Expires in 1 hour (3600 seconds)
-      const { data: urlData, error: urlError } = await supabase.storage
-        .from(pdfBucket)
-        .createSignedUrl(pdfFileName, 3600)
-      
-      if (urlError) {
-        console.error('Error creating signed URL:', urlError)
-        console.error(`Bucket: ${pdfBucket}, File: ${pdfFileName}`)
-        
-        // Try to provide helpful error message
-        let errorMessage = urlError.message
-        if (listData && listData.length > 0) {
-          errorMessage += `\n\nAvailable files in bucket: ${listData.map(f => f.name).join(', ')}`
-        }
-        
-        // Fallback to welcome message if PDF URL fails
-        responseHeaders.set('Content-Type', 'text/plain')
-        return new Response(
-          'Welcome to x402 using Supabase Edge Functions by https://x.com/davek_btc/\n\nError retrieving PDF: ' + errorMessage,
-          {
-            headers: responseHeaders,
-            status: 200,
-          },
-        )
-      }
-      
-      // Return PDF URL as JSON
-      responseHeaders.set('Content-Type', 'application/json')
-      return new Response(
-        JSON.stringify({ 
-          pdfUrl: urlData.signedUrl,
-          expiresIn: '1 hour',
-          message: 'PDF URL expires in 1 hour'
-        }),
-        {
-          headers: responseHeaders,
-          status: 200,
-        },
-      )
-    } catch (error: any) {
-      console.error('Error getting PDF URL:', error)
-      // Fallback to welcome message if PDF URL fails
-      responseHeaders.set('Content-Type', 'text/plain')
-      return new Response(
-        'Welcome to x402 using Supabase Edge Functions by https://x.com/davek_btc/\n\nError retrieving PDF: ' + error.message,
-        {
-          headers: responseHeaders,
-          status: 200,
-        },
-      )
-    }
+    // ============================================================================
+    // CUSTOM FUNCTION IMPLEMENTATION
+    // ============================================================================
+    // 
+    // THIS SECTION IS REPLACED BY THE FUNCTION GENERATOR
+    // The template only handles x402 payment integration.
+    // All custom function logic is inserted here by generate-function.ts
+    //
+    // The custom implementation code should:
+    // 1. Parse inputs from the request (query params, body, or path)
+    // 2. Validate required inputs
+    // 3. Execute the function logic
+    // 4. Return a Response with the result
+    //
+    // Available variables after payment verification:
+    // - req: Request object
+    // - responseHeaders: Headers object (includes CORS and payment headers)
+    // - url: URL object (can be created with: new URL(req.url))
+    //
+    // The custom code must return a Response object.
+    // Example:
+    //   const url = new URL(req.url)
+    //   const param = url.searchParams.get('param')
+    //   if (!param) {
+    //     return new Response(JSON.stringify({ error: 'Missing param' }), 
+    //       { status: 400, headers: { ...responseHeaders, 'Content-Type': 'application/json' } })
+    //   }
+    //   const result = { data: 'your result here' }
+    //   return new Response(JSON.stringify(result), 
+    //     { headers: { ...responseHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    //
+    // ============================================================================
+    // PLACEHOLDER - REPLACED BY GENERATOR
+    // ============================================================================
+    throw new Error('Function implementation not generated. Please run: deno run --allow-read --allow-write --allow-net --allow-env scripts/generate-function.ts <function-slug>')
   } catch (error) {
     console.error('Function error:', error)
     return new Response(

@@ -22,6 +22,10 @@ uv run python main.py
 
 # Extensible approach
 uv run python extensible.py
+
+# Test any function with payment (recommended)
+uv run python test_function.py toolzv4 target=8.8.8.8 count=4 timeout=5000
+uv run python test_function.py url-qr-code-generator url=https://example.com size=300
 ```
 
 ## Two Integration Approaches
@@ -48,6 +52,39 @@ import httpx
 async with httpx.AsyncClient(base_url=base_url) as client:
     client.event_hooks = x402_payment_hooks(account)
     response = await client.get(endpoint_path)
+```
+
+## Testing Functions with Payment
+
+### Using test_function.py (Recommended)
+
+The `test_function.py` script makes it easy to test any x402-enabled function:
+
+```bash
+# Test toolzv4
+uv run python test_function.py toolzv4 target=8.8.8.8 count=4 timeout=5000
+
+# Test url-qr-code-generator
+uv run python test_function.py url-qr-code-generator url=https://example.com size=300
+
+# List available functions
+uv run python test_function.py
+```
+
+**Adding New Functions:**
+
+To add a new function, edit `test_function.py` and add it to the `FUNCTION_CONFIGS` dictionary:
+
+```python
+FUNCTION_CONFIGS = {
+    'your-function-name': {
+        'description': 'Function description',
+        'default_params': {
+            'param1': 'default_value1',
+            'param2': 'default_value2'
+        }
+    }
+}
 ```
 
 ## How it Works
